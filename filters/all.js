@@ -6,6 +6,14 @@ const filter = module.exports;
 filter.kebabCase = string => {
 	return _.kebabCase(string);
 };
+function pascalCase(string) {
+	string = _.camelCase(string);
+	return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+filter.pascalCase = string => {
+	return pascalCase(string);
+}
 
 filter.camelCase = string => {
 	return _.camelCase(string);

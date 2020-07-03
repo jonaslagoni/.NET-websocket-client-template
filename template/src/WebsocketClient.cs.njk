@@ -1,23 +1,23 @@
 ﻿
 
-namespace Blackhawk.Websocket
+namespace Websocket
 {
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
-    using Blackhawk.Websocket.Messages;
+    using Websocket.Messages;
     using System;
     using System.Collections.Generic;
     using System.Threading;
     using System.Timers;
     using WebSocketSharp;
-    public class BlackhawkWebsocket
+    public class WebsocketClient
     {
-        private static BlackhawkWebsocket instance = null;
+        private static WebsocketClient instance = null;
         private Dictionary<MessageTypes, Dictionary<int, Action<BaseMessage>>> observers = new Dictionary<MessageTypes, Dictionary<int, Action<BaseMessage>>>();
         private WebSocket ws;
         private System.Timers.Timer pingTimer;
 
-        private BlackhawkWebsocket()
+        private WebsocketClient()
         {
             createObserverList();
         }
@@ -33,7 +33,7 @@ namespace Blackhawk.Websocket
                 ws = new WebSocket(host);
                 ws.OnOpen += (sender, e) =>
                 {
-                    Console.WriteLine("BlackhawkWebsocket : Connected to websocket");
+                    Console.WriteLine("WebsocketClient : Connected to websocket");
                 };
                 ws.OnMessage += (sender, e) =>
                 {
@@ -43,20 +43,17 @@ namespace Blackhawk.Websocket
                         string messageType = message["type"].ToObject<string>();
                         switch (messageType)
                         {
-                            case "NewTitle":
-                                NewTitleMessage newTitle = message["data"].ToObject<NewTitleMessage>();
-                                Console.Write("BlackhawkWebsocket : Got message " + messageType + ": with data " + newTitle.ToString());
-                                callObserver(MessageTypes.NewTitle, newTitle);
+                            {%- for channelName, channel in asyncapi.channels() %}
+                            {% if channel.hasPublish() %}
+                            case MessageTypes.{{ channelName | camelCase }}:
+                                {{ channelName | camelCase }} message = message["data"].ToObject<{{ channelName | camelCase }}>();
+                                callObserver(MessageTypes.{{ channelName | camelCase }}, message);
                                 break;
-                            case "NewAchievement":
-                                Console.WriteLine(message["data"]);
-                                NewAchievementMessage newKillAchievement = message["data"].ToObject<NewAchievementMessage>();
-                                Console.Write("BlackhawkWebsocket : Got message " + messageType + ": with data " + newKillAchievement.ToString());
-                                callObserver(MessageTypes.NewAchievement, newKillAchievement);
-                                break;
+                            {%- endif %}
+                            {%- endfor %}
                             default:
                                 //This should not happen, report error
-                                Console.WriteLine("BlackhawkWebsocket : Got message with unrecognized message type: " + messageType);
+                                Console.WriteLine("WebsocketClient : Got message with unrecognized message type: " + messageType);
                                 break;
                         }
                     }catch (JsonReaderException)
@@ -68,7 +65,7 @@ namespace Blackhawk.Websocket
                 };
                 ws.OnError += (sender, e) =>
                 {
-                    Console.WriteLine("BlackhawkWebsocket : Error " + e.Message);
+                    Console.WriteLine("WebsocketClient : Error " + e.Message);
                 };
                 ws.OnClose += WsOnOnClose;
                 ws.ConnectAsync();
@@ -128,28 +125,26 @@ namespace Blackhawk.Websocket
                 //Because plugins get loaded and unloaded dynamicly we need to remove any previous one.
                 if (list.ContainsKey(observerId))
                 {
-                    Console.WriteLine(" : Removing prev action");
                     list.Remove(observerId);
                 }
-                Console.WriteLine("BlackhawkWebsocket : adding action for " + observerId);
                 list.Add(observerId, callback);
             }catch(ArgumentNullException e)
             {
-                Console.WriteLine("BlackhawkWebsocket : Could not add observer!");
+                Console.WriteLine("WebsocketClient : Could not add observer!");
             }
         }
         #endregion
 
         #region Singleton
-        public static BlackhawkWebsocket getInstance(string host)
+        public static WebsocketClient getInstance(string host)
         {
             if (instance == null)
             {
-                instance = new BlackhawkWebsocket(host);
+                instance = new WebsocketClient(host);
             }
             return instance;
         }
-        public static BlackhawkWebsocket getInstance()
+        public static WebsocketClient getInstance()
         {
             return instance;
         }
