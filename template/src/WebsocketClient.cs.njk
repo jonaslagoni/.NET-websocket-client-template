@@ -1,0 +1,153 @@
+﻿
+
+namespace Websocket
+{
+    using Newtonsoft.Json;
+    using Newtonsoft.Json.Linq;
+    using Websocket.Messages;
+    using System;
+    using System.Collections.Generic;
+    using System.Threading;
+    using System.Timers;
+    using WebSocketSharp;
+    public class WebsocketClient
+    {
+        private static WebsocketClient instance = null;
+        private Dictionary<MessageTypes, Dictionary<int, Action<BaseMessage>>> observers = new Dictionary<MessageTypes, Dictionary<int, Action<BaseMessage>>>();
+        private WebSocket ws;
+        private System.Timers.Timer pingTimer;
+
+        private WebsocketClient()
+        {
+            createObserverList();
+        }
+
+        #region Websocket helper methods
+        public void startWebsocket(string host)
+        {
+            pingTimer = new System.Timers.Timer();
+            pingTimer.Elapsed += new ElapsedEventHandler(OnTimedEvent);
+            pingTimer.Interval = 40000;
+            if (ws == null || !ws.IsAlive)
+            {
+                ws = new WebSocket(host);
+                ws.OnOpen += (sender, e) =>
+                {
+                    Console.WriteLine("WebsocketClient : Connected to websocket");
+                };
+                ws.OnMessage += (sender, e) =>
+                {
+                    try
+                    {
+                        JObject message = JObject.Parse(e.Data);
+                        string messageType = message["type"].ToObject<string>();
+                        switch (messageType)
+                        {
+                            {%- for channelName, channel in asyncapi.channels() %}
+                            {% if channel.hasPublish() %}
+                            case MessageTypes.{{ channelName | camelCase }}:
+                                {{ channelName | camelCase }} message = message["data"].ToObject<{{ channelName | camelCase }}>();
+                                callObserver(MessageTypes.{{ channelName | camelCase }}, message);
+                                break;
+                            {%- endif %}
+                            {%- endfor %}
+                            default:
+                                //This should not happen, report error
+                                Console.WriteLine("WebsocketClient : Got message with unrecognized message type: " + messageType);
+                                break;
+                        }
+                    }catch (JsonReaderException)
+                    {
+                        //Message recieved reset timer.
+                        pingTimer.Stop();
+                        pingTimer.Start();
+                    }
+                };
+                ws.OnError += (sender, e) =>
+                {
+                    Console.WriteLine("WebsocketClient : Error " + e.Message);
+                };
+                ws.OnClose += WsOnOnClose;
+                ws.ConnectAsync();
+            }
+        }
+
+
+        private void OnTimedEvent(object source, ElapsedEventArgs e)
+        {
+            //Ping was never recieved, lets reconnect
+            if (ws.IsAlive)
+            {
+                pingTimer.Stop();
+                CloseWs();
+            }
+        }
+
+        public void CloseWs()
+        {
+            ws.CloseAsync();
+        }
+        private void WsOnOnClose(object sender, CloseEventArgs closeEventArgs)
+        {
+            if (!ws.IsAlive)
+            {
+                Thread.Sleep(10000);
+                ws.ConnectAsync();
+            }
+        }
+        #endregion
+
+        #region Observer methods
+        private void createObserverList()
+        {
+            foreach (MessageTypes messageType in (MessageTypes[])Enum.GetValues(typeof(MessageTypes)))
+            {
+                observers.Add(messageType, new Dictionary<int, Action<BaseMessage>>());
+            }
+        }
+
+
+        public void callObserver(MessageTypes observerType, BaseMessage message)
+        {
+            Dictionary<int, Action<BaseMessage>> list;
+            observers.TryGetValue(observerType, out list);
+            foreach (Action<BaseMessage> obs in list.Values)
+            {
+                obs(message);
+            }
+        }
+        public void addObserver(int observerId, MessageTypes observerType, Action<BaseMessage> callback)
+        {
+            try
+            {
+                Dictionary<int, Action<BaseMessage>> list;
+                observers.TryGetValue(observerType, out list);
+                //Because plugins get loaded and unloaded dynamicly we need to remove any previous one.
+                if (list.ContainsKey(observerId))
+                {
+                    list.Remove(observerId);
+                }
+                list.Add(observerId, callback);
+            }catch(ArgumentNullException e)
+            {
+                Console.WriteLine("WebsocketClient : Could not add observer!");
+            }
+        }
+        #endregion
+
+        #region Singleton
+        public static WebsocketClient getInstance(string host)
+        {
+            if (instance == null)
+            {
+                instance = new WebsocketClient(host);
+            }
+            return instance;
+        }
+        public static WebsocketClient getInstance()
+        {
+            return instance;
+        }
+        #endregion
+    }
+}

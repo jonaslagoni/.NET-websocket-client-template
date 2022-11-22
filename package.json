@@ -1,0 +1,29 @@
+{
+	"name": "@asyncapi/dotnet-websocket-server-template",
+	"version": "0.1.0",
+	"description": "A simple .NET websocket client which allows for dynamically subscribing and unsubscribing to channels.",
+	"keywords": [
+		"asyncapi",
+		"generator",
+		"ts",
+		"websocket",
+		"client",
+		"template"
+	],
+	"author": "Jonas Lagoni (jonas-lt@live.dk)",
+	"license": "Apache-2.0",
+	"dependencies": {
+		"filenamify": "^4.1.0",
+		"lodash": "^4.17.15",
+		"@asyncapi/generator-filters": "^1.0.0"
+	},
+	"generator": {
+		"supportedProtocols": [
+			"ws"
+		],
+		"generator": ">=0.50.0 <2.0.0",
+		"filters": [
+			"@asyncapi/generator-filters"
+		]
+	}
+}
